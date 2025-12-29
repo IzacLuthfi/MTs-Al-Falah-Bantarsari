@@ -41,7 +41,6 @@ export default function TambahGuruPage() {
                 placeholder="19800101..."
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none"
               />
-              <p className="text-xs text-slate-500 mt-1">*Digunakan sebagai Username Login</p>
             </div>
 
             {/* Pendidikan */}
@@ -61,18 +60,42 @@ export default function TambahGuruPage() {
             </div>
           </div>
 
-          {/* Info Login Otomatis */}
-          <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-700">
-            <p className="font-semibold">Informasi Akun Login:</p>
-            <ul className="list-disc list-inside mt-1">
-              <li>Email: <span className="font-mono">nip@guru.mts.id</span></li>
-              <li>Password: <span className="font-mono">guru[nip]</span></li>
-            </ul>
+          <hr className="border-slate-100" />
+
+          {/* AKUN LOGIN MANUAL */}
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 mb-4">Pengaturan Akun Login</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <input 
+                    name="email" 
+                    type="email" 
+                    required 
+                    placeholder="email@sekolah.id"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none"
+                  />
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                  <input 
+                    name="password" 
+                    type="text" 
+                    required 
+                    placeholder="Minimal 6 karakter"
+                    minLength={6}
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-green-500 outline-none"
+                  />
+                </div>
+            </div>
           </div>
 
           {/* Tombol Submit */}
           <button 
-            suppressHydrationWarning={true}
+            suppressHydrationWarning
             type="submit" 
             className="w-full flex items-center justify-center gap-2 bg-green-700 text-white py-3 rounded-lg font-medium hover:bg-green-800 transition"
           >

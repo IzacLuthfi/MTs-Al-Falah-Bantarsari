@@ -6,14 +6,14 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
 export async function createTeacher(formData: FormData) {
-  // 1. Cek Service Key
+  // 1. Cek Service Key (Wajib untuk Admin Actions)
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey) {
     console.error("❌ ERROR: Service Key hilang. Cek .env.local")
-    return
+    return redirect('/dashboard/admin/guru/tambah?error=Server Error: Konfigurasi Key hilang')
   }
 
-  // 2. Cek User Login
+  // 2. Cek User Login (Hanya Admin yang boleh akses)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return redirect('/login')
@@ -22,15 +22,18 @@ export async function createTeacher(formData: FormData) {
   const fullName = formData.get('fullName') as string
   const nip = formData.get('nip') as string
   const education = formData.get('education') as string
-  
-  // 4. Inisialisasi Admin Client
+  const email = formData.get('email') as string
+  const password = formData.get('password') as string
+
+  // Validasi Input Kosong
+  if (!email || !password || !nip || !fullName) {
+    return redirect('/dashboard/admin/guru/tambah?error=Semua kolom wajib diisi')
+  }
+
+  // 4. Inisialisasi Admin Client (Mode Dewa)
   const supabaseAdmin = createAdminClient()
 
   // 5. Buat Akun Login (Auth)
-  // Email: nip@guru.mts.id | Password: guru[nip]
-  const email = `${nip}@guru.mts.id`
-  const password = `guru${nip}`
-
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email: email,
     password: password,
@@ -38,25 +41,20 @@ export async function createTeacher(formData: FormData) {
     user_metadata: { full_name: fullName, role: 'guru' }
   })
 
-  // Handle jika user sudah ada (User already registered)
-  if (authError && !authError.message.includes("registered")) {
+  // HANDLE ERROR: Jika Email Sudah Ada
+  if (authError) {
     console.error('❌ Gagal Buat Akun:', authError.message)
-    return 
+    return redirect(`/dashboard/admin/guru/tambah?error=Gagal: ${authError.message}`)
   }
 
-  // Ambil ID (Entah baru dibuat atau yang sudah ada)
-  let newUserId = authData.user?.id
-  
-  // Jika user sudah ada, kita harus cari ID-nya manual lewat email
+  const newUserId = authData.user?.id
   if (!newUserId) {
-     const { data: existingUser } = await supabaseAdmin.rpc('get_user_id_by_email', { email_input: email })
-     // Catatan: RPC agak ribet, kita asumsi user baru dulu. 
-     // Jika error "User already registered", biasanya admin harus hapus user lama dulu di Supabase Dashboard.
-     console.error("⚠️ User sudah ada. Harap hapus user lama di dashboard jika ingin reset.")
-     return
+    return redirect('/dashboard/admin/guru/tambah?error=Gagal mendapatkan ID User baru')
   }
 
-  // 6. PAKSA BUAT PROFILE (Agar tidak error Foreign Key)
+  // 6. UPDATE PROFILE (Tabel profiles)
+  // Kita update profile yang otomatis dibuat oleh Trigger (jika ada trigger), 
+  // atau buat baru jika belum ada.
   const { error: profileError } = await supabaseAdmin
     .from('profiles')
     .upsert({ 
@@ -66,9 +64,14 @@ export async function createTeacher(formData: FormData) {
       role: 'guru'
     })
   
-  if (profileError) console.error("❌ Gagal Profile:", profileError.message)
+  if (profileError) {
+    console.error("❌ Gagal Profile:", profileError.message)
+    // ROLLBACK: Hapus user auth jika profile gagal
+    await supabaseAdmin.auth.admin.deleteUser(newUserId)
+    return redirect('/dashboard/admin/guru/tambah?error=Gagal menyimpan profil')
+  }
 
-  // 7. Simpan Data Detail Guru
+  // 7. SIMPAN DATA DETAIL GURU (Tabel teachers)
   const { error: dbError } = await supabaseAdmin
     .from('teachers')
     .insert({
@@ -80,12 +83,21 @@ export async function createTeacher(formData: FormData) {
 
   if (dbError) {
     console.error('❌ Gagal Simpan Guru:', dbError.message)
-    // Hapus auth jika gagal (Cleanup)
+    
+    // ROLLBACK PENTING: Hapus User Auth agar tidak jadi Data Hantu
     await supabaseAdmin.auth.admin.deleteUser(newUserId)
-    return 
+
+    // Cek pesan error spesifik (misal NIP kembar)
+    if (dbError.message.includes("duplicate key") || dbError.message.includes("unique constraint")) {
+        return redirect('/dashboard/admin/guru/tambah?error=Gagal: NIP sudah terdaftar pada guru lain')
+    }
+
+    return redirect(`/dashboard/admin/guru/tambah?error=Database Error: ${dbError.message}`)
   }
 
-  // 8. Sukses
+  // 8. SUKSES
+  // Karena ini Form "Tambah", kita redirect balik ke list.
+  // Note: Ini akan memunculkan Banner Hijau di list guru (karena ada ?success=...)
   revalidatePath('/dashboard/admin/guru')
-  redirect('/dashboard/admin/guru')
+  redirect('/dashboard/admin/guru?success=Guru berhasil ditambahkan')
 }

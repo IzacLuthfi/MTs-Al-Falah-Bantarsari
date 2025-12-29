@@ -1,53 +1,55 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
+import { createClient } from "@/utils/supabase/server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
-// 1. Logic Update Profil (Nama)
+// 1. Action Update Profil (Nama)
 export async function updateProfile(formData: FormData) {
-  const supabase = await createClient()
+  const supabase = await createClient();
+  
+  const fullName = formData.get("fullName") as string;
+  
+  // Ambil user yg sedang login
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return redirect("/login");
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return redirect('/login')
-
-  const fullName = formData.get('fullName') as string
-
+  // Update ke tabel profiles
   const { error } = await supabase
-    .from('profiles')
+    .from("profiles")
     .update({ full_name: fullName })
-    .eq('id', user.id)
+    .eq("id", user.id);
 
   if (error) {
-    return redirect('/dashboard/admin/settings?error=Gagal update profil')
+    return redirect("/dashboard/admin/settings?error=Gagal mengupdate profil");
   }
 
-  revalidatePath('/dashboard')
-  redirect('/dashboard/admin/settings?success=Profil berhasil diupdate')
+  revalidatePath("/dashboard/admin/settings");
+  return redirect("/dashboard/admin/settings?success=Profil berhasil diperbarui");
 }
 
-// 2. Logic Ganti Password
+// 2. Action Ganti Password
 export async function updatePassword(formData: FormData) {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
-  const password = formData.get('password') as string
-  const confirmPassword = formData.get('confirmPassword') as string
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
 
+  // Validasi sederhana
   if (password !== confirmPassword) {
-    return redirect('/dashboard/admin/settings?error=Password tidak cocok')
+    return redirect("/dashboard/admin/settings?error=Password dan Konfirmasi tidak sama");
   }
 
   if (password.length < 6) {
-    return redirect('/dashboard/admin/settings?error=Password minimal 6 karakter')
+    return redirect("/dashboard/admin/settings?error=Password minimal 6 karakter");
   }
 
-  const { error } = await supabase.auth.updateUser({
-    password: password
-  })
+  // Update Password di Auth Supabase
+  const { error } = await supabase.auth.updateUser({ password: password });
 
   if (error) {
-    return redirect(`/dashboard/admin/settings?error=${error.message}`)
+    return redirect("/dashboard/admin/settings?error=Gagal mengganti password");
   }
 
-  redirect('/dashboard/admin/settings?success=Password berhasil diganti')
+  return redirect("/dashboard/admin/settings?success=Password berhasil diganti");
 }
